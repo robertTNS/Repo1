@@ -1,13 +1,12 @@
 #Fresh Service Cleanup Script
 
 #Logging
-$logFilePath =[System.Environment]::GetEnvironmentVariable('TEMP','Machine')
+function Log-Message([String]$Message)
+{
+    Add-Content -Path C:\Temp\Remove-FsInstallLog.txt $Message
+}
 
-$logFileStream = [System.IO.File]::Open($logFilePath, 'Append', 'Write', 'Read')
-
-$logFileWriter = [System.IO.StreamWriter]::new($logFileStream)
-
-
+Log-Message "Log file created `n"
 
 
 
@@ -47,15 +46,16 @@ function Remove-FsInstall  {
     $uninstallKeyDict = New-Object "System.Collections.Generic.Dictionary[string,string]"
 
     # Define registry key paths for FS
-    $uninstallKeyPath = "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"
-    $uninstallKeyPath64 = "SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
-    $fsAgent64 = "SOFTWARE\Wow6432Node\Freshdesk\FSAgent\"
-    $fsAgent= "SOFTWARE\Freshdesk\FSAgent\"
     $uninstallerVerification = "SOFTWARE\Wow6432Node\Freshdesk\FSAgent\UninstallVerification"
-    $installDir = "SOFTWARE\Freshdesk\FSAgent\InstallDir"
+    $uninstallKeyPath64 = "SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
+    $uninstallKeyPath = "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"
+    $fsAgent64 = "SOFTWARE\Wow6432Node\Freshdesk\FSAgent"
+    $fsAgent= "SOFTWARE\Freshdesk\FSAgent"
     $installDir64= "SOFTWARE\Wow6432Node\Freshdesk\FSAgent\InstallDir"
-    $products = "SOFTWARE\Classes\Installer\Products"
+    $installDir = "SOFTWARE\Freshdesk\FSAgent\InstallDir"
     $products64 = "SOFTWARE\Wow6432Node\Classes\Installer\Products"
+    $products = "SOFTWARE\Classes\Installer\Products"
+    
 
  
     # Enumerate through keys and add them to the dictionary. 
@@ -72,33 +72,77 @@ function Remove-FsInstall  {
     }
      catch{
         
-    Write-Host "An Error occured."
+    Write-Host "An Error occured while adding keys to the dictionary."
 
-    $logFileWriter.WriteLine("Error occured:")
+    Log-Message "An Error occured while adding keys to the dictionary:"
 
-    $logFileWriter.WriteLine($_)
+    Log-Message "Error: $($_) `n" 
 
-    $logFileWriter.WriteLine($_.ScriptStackTrace)
+    Log-Message "StackTrace: $($_.ScriptStackTrace) `n"
     }
 
     
 
-    # Iterate through keys and remove if DisplayName matches
+    # search keys and remove if  display name or product name is found 
     foreach ($key in $uninstallKeyDict.Keys) {
-        $displayName = (Get-ItemProperty -Path "HKLM:\$key" -Name "DisplayName").DisplayName
-        if ($displayName -eq "Freshservice Discovery Agent") {
+        try {
+        $displayName = (Get-ItemProperty -Path "HKLM:\$key\$subKeys" -Name "DisplayName").DisplayName
+        if ($displayName -like "Freshservice Discovery Agent") {
             Remove-RegistryKey -hive ([Microsoft.Win32.Registry]::LocalMachine) -key $key
+            Log-Message "Key with Matching Display Name found! Found:: '$displayName'"
         }
-        $productName = (Get-ItemProperty -Path "HKLM:\$key" -Name "ProductName").ProductName
-        if ($productName -eq "Freshservice Discovery Agent"){
+        else{
+            Log-Message "Key with Matching Display Name not found. Found '$displayName' instead."
+        }
+    }
+        catch {
+            Log-Message "An Error occured:"
+
+            Log-Message "Error: $($_) `n" 
+        
+            Log-Message "StackTrace: $($_.ScriptStackTrace) `n"
+        }
+
+        try{
+        $productName = (Get-ItemProperty -Path "HKLM:\$key\$subKeys" -Name "ProductName").ProductName
+        if ($productName -like "Freshservice Discovery Agent"){
             Remove-RegistryKey -hive([Microsoft.Win32.Registry]::LocalMachine) -key $key
+            Log-Message "Key with Matching Display Name found! Found:: '$productName'"
         }
+        else{
+            Log-Message "Key with Matching Product Name not found. Found '$productName'  instead."
+        }
+        }
+    
+        catch{
+            Log-Message "An Error occured:"
+
+            Log-Message "Error: $($_) `n" 
+        
+            Log-Message "StackTrace: $($_.ScriptStackTrace) `n"
+
+    }
+    try{
+        $installDirectory = (Get-ItemProperty -Path "HKLM:\$key\" -Name "InstallDir").InstallDir
+        if ($installDirectory -like "Freshservice Discovery Agent"){
+            Remove-RegistryKey -hive([Microsoft.Win32.Registry]::LocalMachine) -key $key
+            Log-Message "Key with Matching install directory found! Found:: '$installDirectory'"
+        }
+        else{
+            Log-Message "Key with Matching install directory not found. Found '$installDirectory'  instead."
+        }
+        }
+    
+        catch{
+            Log-Message "An Error occured:"
+
+            Log-Message "Error: $($_) `n" 
+        
+            Log-Message "StackTrace: $($_.ScriptStackTrace) `n"
+
+    }
     }
 }
 
 # Remove uninstall key
 Remove-FsInstall
-
-
-$logFileWriter.Close()
-
